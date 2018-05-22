@@ -1,7 +1,7 @@
 package org.jsoup.nodes;
 
 import org.jsoup.SerializationException;
-import org.jsoup.helper.StringUtil;
+import org.jsoup.internal.StringUtil;
 import org.jsoup.helper.Validate;
 import org.jsoup.select.NodeFilter;
 import org.jsoup.select.NodeTraversor;
@@ -566,9 +566,9 @@ public abstract class Node implements Cloneable {
      @see Element#text()
      */
     public String outerHtml() {
-        StringBuilder accum = StringUtil.stringBuilder();
+        StringBuilder accum = StringUtil.borrowBuilder();
         outerHtml(accum);
-        return accum.toString();
+        return StringUtil.releaseBuilder(accum);
     }
 
     protected void outerHtml(Appendable accum) {

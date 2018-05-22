@@ -1,5 +1,6 @@
 package org.jsoup.select;
 
+import org.jsoup.internal.StringUtil;
 import org.jsoup.helper.Validate;
 import org.jsoup.nodes.Element;
 import org.jsoup.nodes.FormElement;
@@ -205,13 +206,13 @@ public class Elements extends ArrayList<Element> {
      * @see #eachText()
      */
     public String text() {
-        StringBuilder sb = new StringBuilder();
+        StringBuilder sb = StringUtil.borrowBuilder();
         for (Element element : this) {
             if (sb.length() != 0)
                 sb.append(" ");
             sb.append(element.text());
         }
-        return sb.toString();
+        return StringUtil.releaseBuilder(sb);
     }
 
     /**
@@ -251,13 +252,13 @@ public class Elements extends ArrayList<Element> {
      * @see #outerHtml()
      */
     public String html() {
-        StringBuilder sb = new StringBuilder();
+        StringBuilder sb = StringUtil.borrowBuilder();
         for (Element element : this) {
             if (sb.length() != 0)
                 sb.append("\n");
             sb.append(element.html());
         }
-        return sb.toString();
+        return StringUtil.releaseBuilder(sb);
     }
     
     /**
@@ -267,13 +268,13 @@ public class Elements extends ArrayList<Element> {
      * @see #html()
      */
     public String outerHtml() {
-        StringBuilder sb = new StringBuilder();
+        StringBuilder sb = StringUtil.borrowBuilder();
         for (Element element : this) {
             if (sb.length() != 0)
                 sb.append("\n");
             sb.append(element.outerHtml());
         }
-        return sb.toString();
+        return StringUtil.releaseBuilder(sb);
     }
 
     /**
@@ -510,7 +511,7 @@ public class Elements extends ArrayList<Element> {
     }
 
     /**
-     * Get all of the following element siblings of each element in this list.
+     * Get each of the following element siblings of each element in this list.
      * @return all following element siblings.
      */
     public Elements nextAll() {
@@ -518,7 +519,7 @@ public class Elements extends ArrayList<Element> {
     }
 
     /**
-     * Get all of the following element siblings of each element in this list, filtered by the query.
+     * Get each of the following element siblings of each element in this list, that match the query.
      * @param query CSS query to match siblings against
      * @return all following element siblings.
      */
@@ -544,7 +545,7 @@ public class Elements extends ArrayList<Element> {
     }
 
     /**
-     * Get all of the previous element siblings of each element in this list.
+     * Get each of the previous element siblings of each element in this list.
      * @return all previous element siblings.
      */
     public Elements prevAll() {
@@ -552,7 +553,7 @@ public class Elements extends ArrayList<Element> {
     }
 
     /**
-     * Get all of the previous element siblings of each element in this list, filtered by the query.
+     * Get each of the previous element siblings of each element in this list, that match the query.
      * @param query CSS query to match siblings against
      * @return all previous element siblings.
      */

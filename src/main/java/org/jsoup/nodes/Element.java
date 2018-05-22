@@ -1,7 +1,7 @@
 package org.jsoup.nodes;
 
 import org.jsoup.helper.ChangeNotifyingArrayList;
-import org.jsoup.helper.StringUtil;
+import org.jsoup.internal.StringUtil;
 import org.jsoup.helper.Validate;
 import org.jsoup.parser.ParseSettings;
 import org.jsoup.parser.Tag;
@@ -688,6 +688,15 @@ public class Element extends Node {
     }
 
     /**
+     * Get each of the sibling elements that come after this element.
+     *
+     * @return each of the element siblings after this element, or an empty list if there are no next sibling elements
+     */
+    public Elements nextElementSiblings() {
+        return nextElementSiblings(true);
+    }
+
+    /**
      * Gets the previous element sibling of this element.
      * @return the previous element, or null if there is no previous element
      * @see #nextElementSibling()
@@ -701,6 +710,23 @@ public class Element extends Node {
             return siblings.get(index-1);
         else
             return null;
+    }
+
+    /**
+     * Get each of the element siblings before this element.
+     *
+     * @return the previous element siblings, or an empty list if there are none.
+     */
+    public Elements previousElementSiblings() {
+        return nextElementSiblings(false);
+    }
+
+    private Elements nextElementSiblings(boolean next) {
+        Elements els = new Elements();
+        if (parentNode == null)
+            return  els;
+        els.add(this);
+        return next ?  els.nextAll() : els.prevAll();
     }
 
     /**
@@ -1020,7 +1046,7 @@ public class Element extends Node {
      * @see #textNodes()
      */
     public String text() {
-        final StringBuilder accum = new StringBuilder();
+        final StringBuilder accum = StringUtil.borrowBuilder();
         NodeTraversor.traverse(new NodeVisitor() {
             public void head(Node node, int depth) {
                 if (node instanceof TextNode) {
@@ -1045,7 +1071,8 @@ public class Element extends Node {
 
             }
         }, this);
-        return accum.toString().trim();
+
+        return StringUtil.releaseBuilder(accum).trim();
     }
 
     /**
@@ -1056,7 +1083,7 @@ public class Element extends Node {
      * @see #text()
      */
     public String wholeText() {
-        final StringBuilder accum = new StringBuilder();
+        final StringBuilder accum = StringUtil.borrowBuilder();
         NodeTraversor.traverse(new NodeVisitor() {
             public void head(Node node, int depth) {
                 if (node instanceof TextNode) {
@@ -1068,7 +1095,8 @@ public class Element extends Node {
             public void tail(Node node, int depth) {
             }
         }, this);
-        return accum.toString();
+
+        return StringUtil.releaseBuilder(accum);
     }
 
     /**
@@ -1083,9 +1111,9 @@ public class Element extends Node {
      * @see #textNodes()
      */
     public String ownText() {
-        StringBuilder sb = new StringBuilder();
+        StringBuilder sb = StringUtil.borrowBuilder();
         ownText(sb);
-        return sb.toString().trim();
+        return StringUtil.releaseBuilder(sb).trim();
     }
 
     private void ownText(StringBuilder accum) {
@@ -1172,7 +1200,7 @@ public class Element extends Node {
      * @see #dataNodes()
      */
     public String data() {
-        StringBuilder sb = new StringBuilder();
+        StringBuilder sb = StringUtil.borrowBuilder();
 
         for (Node childNode : childNodes) {
             if (childNode instanceof DataNode) {
@@ -1192,7 +1220,7 @@ public class Element extends Node {
                 sb.append(cDataNode.getWholeText());
             }
         }
-        return sb.toString();
+        return StringUtil.releaseBuilder(sb);
     }   
 
     /**
@@ -1395,9 +1423,10 @@ public class Element extends Node {
      * @see #outerHtml()
      */
     public String html() {
-        StringBuilder accum = StringUtil.stringBuilder();
+        StringBuilder accum = StringUtil.borrowBuilder();
         html(accum);
-        return NodeUtils.outputSettings(this).prettyPrint() ? accum.toString().trim() : accum.toString();
+        String html = StringUtil.releaseBuilder(accum);
+        return NodeUtils.outputSettings(this).prettyPrint() ? html.trim() : html;
     }
 
     @Override

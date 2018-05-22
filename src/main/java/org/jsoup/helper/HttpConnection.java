@@ -5,6 +5,7 @@ import org.jsoup.HttpStatusException;
 import org.jsoup.UncheckedIOException;
 import org.jsoup.UnsupportedMimeTypeException;
 import org.jsoup.internal.ConstrainableInputStream;
+import org.jsoup.internal.StringUtil;
 import org.jsoup.nodes.Document;
 import org.jsoup.parser.Parser;
 import org.jsoup.parser.TokenQueue;
@@ -75,6 +76,11 @@ public class HttpConnection implements Connection {
         return con;
     }
 
+    public HttpConnection() {
+        req = new Request();
+        res = new Response();
+    }
+
     /**
      * Encodes the input URL into a safe ASCII URL string
      * @param url unescaped URL
@@ -109,11 +115,6 @@ public class HttpConnection implements Connection {
 
     private Connection.Request req;
     private Connection.Response res;
-
-	private HttpConnection() {
-        req = new Request();
-        res = new Response();
-    }
 
     public Connection url(URL url) {
         req.url(url);
@@ -703,6 +704,7 @@ public class HttpConnection implements Connection {
 
         static Response execute(Connection.Request req, Response previousResponse) throws IOException {
             Validate.notNull(req, "Request must not be null");
+            Validate.notNull(req.url(), "URL must be specified to connect");
             String protocol = req.url().getProtocol();
             if (!protocol.equals("http") && !protocol.equals("https"))
                 throw new MalformedURLException("Only http & https protocols supported");
@@ -1066,7 +1068,7 @@ public class HttpConnection implements Connection {
         }
 
         private static String getRequestCookieString(Connection.Request req) {
-            StringBuilder sb = StringUtil.stringBuilder();
+            StringBuilder sb = StringUtil.borrowBuilder();
             boolean first = true;
             for (Map.Entry<String, String> cookie : req.cookies().entrySet()) {
                 if (!first)
@@ -1076,13 +1078,13 @@ public class HttpConnection implements Connection {
                 sb.append(cookie.getKey()).append('=').append(cookie.getValue());
                 // todo: spec says only ascii, no escaping / encoding defined. validate on set? or escape somehow here?
             }
-            return sb.toString();
+            return StringUtil.releaseBuilder(sb);
         }
 
         // for get url reqs, serialise the data map into the url
         private static void serialiseRequestUrl(Connection.Request req) throws IOException {
             URL in = req.url();
-            StringBuilder url = StringUtil.stringBuilder();
+            StringBuilder url = StringUtil.borrowBuilder();
             boolean first = true;
             // reconstitute the query, ready for appends
             url
@@ -1106,21 +1108,18 @@ public class HttpConnection implements Connection {
                     .append('=')
                     .append(URLEncoder.encode(keyVal.value(), DataUtil.defaultCharset));
             }
-            req.url(new URL(url.toString()));
+            req.url(new URL(StringUtil.releaseBuilder(url)));
             req.data().clear(); // moved into url as get params
         }
     }
 
     private static boolean needsMultipart(Connection.Request req) {
         // multipart mode, for files. add the header if we see something with an inputstream, and return a non-null boundary
-        boolean needsMulti = false;
         for (Connection.KeyVal keyVal : req.data()) {
-            if (keyVal.hasInputStream()) {
-                needsMulti = true;
-                break;
-            }
+            if (keyVal.hasInputStream())
+                return true;
         }
-        return needsMulti;
+        return false;
     }
 
     public static class KeyVal implements Connection.KeyVal {
