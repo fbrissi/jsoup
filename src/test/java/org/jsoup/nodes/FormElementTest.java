@@ -2,11 +2,11 @@ package org.jsoup.nodes;
 
 import org.jsoup.Connection;
 import org.jsoup.Jsoup;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Tests for FormElement
@@ -30,6 +30,7 @@ public class FormElementTest {
                 "<input name='seven' type='radio' value='on' checked><input name='seven' type='radio' value='off'>" +
                 "<input name='eight' type='checkbox' checked><input name='nine' type='checkbox' value='unset'>" +
                 "<input name='ten' value='text' disabled>" +
+                "<input name='eleven' value='text' type='button'>" +
                 "</form>";
         Document doc = Jsoup.parse(html);
         FormElement form = (FormElement) doc.select("form").first();
@@ -44,6 +45,14 @@ public class FormElementTest {
         assertEquals("eight=on", data.get(5).toString()); // default
         // nine should not appear, not checked checkbox
         // ten should not appear, disabled
+        // eleven should not appear, button
+    }
+
+    @Test public void formDataUsesFirstAttribute() {
+        String html = "<form><input name=test value=foo name=test2 value=bar>";
+        Document doc = Jsoup.parse(html);
+        FormElement form = (FormElement) doc.selectFirst("form");
+        assertEquals("test=foo", form.formData().get(0).toString());
     }
 
     @Test public void createsSubmitableConnection() {
@@ -81,7 +90,7 @@ public class FormElementTest {
 
         boolean threw = false;
         try {
-            Connection con = form.submit();
+            form.submit();
         } catch (IllegalArgumentException e) {
             threw = true;
             assertEquals("Could not determine a form action URL for submit. Ensure you set a base URI when parsing.",
@@ -164,6 +173,6 @@ public class FormElementTest {
         assertEquals(2, data.size());
         assertEquals("user", data.get(0).key());
         assertEquals("login", data.get(1).key());
-        assertEquals(null, doc.selectFirst("input[name=pass]"));
+        assertNull(doc.selectFirst("input[name=pass]"));
     }
 }

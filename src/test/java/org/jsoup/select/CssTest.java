@@ -1,23 +1,24 @@
 package org.jsoup.select;
 
-import static org.junit.Assert.*;
-
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.parser.Tag;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.*;
+
 
 public class CssTest {
 
 	private Document html = null;
 	private static String htmlString;
-	
-	@BeforeClass
+
+	@BeforeAll
 	public static void initClass() {
 		StringBuilder sb = new StringBuilder("<html><head></head><body>");
-		
+
 		sb.append("<div id='pseudo'>");
 		for (int i = 1; i <= 10; i++) {
 			sb.append(String.format("<p>%d</p>",i));
@@ -35,7 +36,7 @@ public class CssTest {
 
 		sb.append("<span id='onlySpan'><br /></span>");
 		sb.append("<p class='empty'><!-- Comment only is still empty! --></p>");
-		
+
 		sb.append("<div id='only'>");
 		sb.append("Some text before the <em>only</em> child in this div");
 		sb.append("</div>");
@@ -47,16 +48,16 @@ public class CssTest {
 		sb.append("<input class='blue' value='Blue'>");
 		sb.append("</span>");
 		sb.append("</div>");
-		
+
 		sb.append("</body></html>");
 		htmlString = sb.toString();
 	}
 
-	@Before
+	@BeforeEach
 	public void init() {
 		html  = Jsoup.parse(htmlString);
 	}
-	
+
 	@Test
 	public void firstChild() {
 		check(html.select("#pseudo :first-child"), "1");
@@ -68,7 +69,7 @@ public class CssTest {
 		check(html.select("#pseudo :last-child"), "10");
 		check(html.select("html:last-child"));
 	}
-	
+
 	@Test
 	public void nthChild_simple() {
 		for(int i = 1; i <=10; i++) {
@@ -96,7 +97,7 @@ public class CssTest {
 			check(html.select(String.format("#type p:nth-of-type(%d)", i)), String.valueOf(i));
 		}
 	}
-	
+
 	@Test
 	public void nthLastOfType_simple() {
 		for(int i = 1; i <=10; i++) {
@@ -132,7 +133,7 @@ public class CssTest {
 		check(html.select("#type :nth-of-type(+5)"), "5", "5", "5", "5");
 	}
 
-	
+
 	@Test
 	public void nthLastChild_advanced() {
 		check(html.select("#pseudo :nth-last-child(-5)"));
@@ -171,7 +172,7 @@ public class CssTest {
 		checkVal(html.select("#enabled_disabled_advanced > span.color > input.blue:enabled"), "Blue");
 		checkVal(html.select("#enabled_disabled_advanced > span.color > input.blue:disabled"));
 	}
-	
+
 	@Test
 	public void firstOfType() {
 		check(html.select("div:not(#only) :first-of-type"), "1", "1", "1", "1", "1", "only", "", "");
@@ -192,16 +193,16 @@ public class CssTest {
 		assertEquals("input", sel.get(3).tagName());
 		assertEquals("input", sel.get(4).tagName());
 	}
-	
+
 	@Test
 	public void onlyChild() {
 		final Elements sel = html.select("span :only-child");
 		assertEquals(1, sel.size());
 		assertEquals("br", sel.get(0).tagName());
-		
+
 		check(html.select("#only :only-child"), "only");
 	}
-	
+
 	@Test
 	public void onlyOfType() {
 		final Elements sel = html.select(":only-of-type");
@@ -216,24 +217,24 @@ public class CssTest {
 		assertEquals("em", sel.get(6).tagName());
 		assertEquals("span", sel.get(7).tagName());
 	}
-	
+
 	protected void check(Elements result, String...expectedContent ) {
-		assertEquals("Number of elements", expectedContent.length, result.size());
+		assertEquals(expectedContent.length, result.size(), "Number of elements");
 		for (int i = 0; i < expectedContent.length; i++) {
 			assertNotNull(result.get(i));
-			assertEquals("Expected element",expectedContent[i], result.get(i).ownText());
+			assertEquals(expectedContent[i], result.get(i).ownText(), "Expected element");
 		}
 	}
 
 	protected void checkVal(Elements result, String...expectedContent ) {
-		assertEquals("Number of elements", expectedContent.length, result.size());
+		assertEquals(expectedContent.length, result.size(), "Number of elements");
 		for (int i = 0; i < expectedContent.length; i++) {
 			assertNotNull(result.get(i));
-			assertEquals("Expected element",expectedContent[i], result.get(i).val());
+			assertEquals(expectedContent[i], result.get(i).val(), "Expected element");
 		}
 	}
 
-	
+
 	@Test
 	public void root() {
 		Elements sel = html.select(":root");

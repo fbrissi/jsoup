@@ -1,13 +1,14 @@
 package org.jsoup.nodes;
 
 import org.jsoup.helper.ChangeNotifyingArrayList;
-import org.jsoup.internal.StringUtil;
 import org.jsoup.helper.Validate;
+import org.jsoup.internal.StringUtil;
 import org.jsoup.parser.ParseSettings;
 import org.jsoup.parser.Tag;
 import org.jsoup.select.Collector;
 import org.jsoup.select.Elements;
 import org.jsoup.select.Evaluator;
+import org.jsoup.select.NodeFilter;
 import org.jsoup.select.NodeTraversor;
 import org.jsoup.select.NodeVisitor;
 import org.jsoup.select.QueryParser;
@@ -39,44 +40,43 @@ import static org.jsoup.internal.Normalizer.normalize;
 public class Element extends Node {
     private static final List<Node> EMPTY_NODES = Collections.emptyList();
     private static final Pattern classSplit = Pattern.compile("\\s+");
+    private static final String baseUriKey = Attributes.internalKey("baseUri");
     private Tag tag;
     private WeakReference<List<Element>> shadowChildrenRef; // points to child elements shadowed from node children
     List<Node> childNodes;
     private Attributes attributes;
-    private String baseUri;
 
     /**
      * Create a new, standalone element.
      * @param tag tag name
      */
     public Element(String tag) {
-        this(Tag.valueOf(tag), "", new Attributes());
+        this(Tag.valueOf(tag), "", null);
     }
 
     /**
      * Create a new, standalone Element. (Standalone in that is has no parent.)
      * 
      * @param tag tag of this element
-     * @param baseUri the base URI
-     * @param attributes initial attributes
+     * @param baseUri the base URI (optional, may be null to inherit from parent, or "" to clear parent's)
+     * @param attributes initial attributes (optional, may be null)
      * @see #appendChild(Node)
      * @see #appendElement(String)
      */
     public Element(Tag tag, String baseUri, Attributes attributes) {
         Validate.notNull(tag);
-        Validate.notNull(baseUri);
         childNodes = EMPTY_NODES;
-        this.baseUri = baseUri;
         this.attributes = attributes;
         this.tag = tag;
+        if (baseUri != null)
+            this.setBaseUri(baseUri);
     }
-    
+
     /**
-     * Create a new Element from a tag and a base URI.
+     * Create a new Element from a Tag and a base URI.
      * 
      * @param tag element tag
-     * @param baseUri the base URI of this element. It is acceptable for the base URI to be an empty
-     *            string, but not null.
+     * @param baseUri the base URI of this element. Optional, and will inherit from its parent, if any.
      * @see Tag#valueOf(String, ParseSettings)
      */
     public Element(Tag tag, String baseUri) {
@@ -104,12 +104,22 @@ public class Element extends Node {
 
     @Override
     public String baseUri() {
-        return baseUri;
+        return searchUpForAttribute(this, baseUriKey);
+    }
+
+    private static String searchUpForAttribute(final Element start, final String key) {
+        Element el = start;
+        while (el != null) {
+            if (el.hasAttributes() && el.attributes.hasKey(key))
+                return el.attributes.get(key);
+            el = el.parent();
+        }
+        return "";
     }
 
     @Override
     protected void doSetBaseUri(String baseUri) {
-        this.baseUri = baseUri;
+        attributes().put(baseUriKey, baseUri);
     }
 
     @Override
@@ -123,12 +133,23 @@ public class Element extends Node {
     }
 
     /**
-     * Get the name of the tag for this element. E.g. {@code div}
+     * Get the name of the tag for this element. E.g. {@code div}. If you are using {@link ParseSettings#preserveCase
+     * case preserving parsing}, this will return the source's original case.
      * 
      * @return the tag name
      */
     public String tagName() {
         return tag.getName();
+    }
+
+    /**
+     * Get the normalized name of this Element's tag. This will always be the lowercased version of the tag, regardless
+     * of the tag case preserving setting of the parser. For e.g., {@code <DIV>} and {@code <div>} both have a
+     * normal name of {@code div}.
+     * @return normal name
+     */
+    public String normalName() {
+        return tag.normalName();
     }
 
     /**
@@ -169,7 +190,7 @@ public class Element extends Node {
      * @return The id attribute, if present, or an empty string if not.
      */
     public String id() {
-        return attributes().getIgnoreCase("id");
+        return hasAttributes() ? attributes.getIgnoreCase("id") :"";
     }
 
     /**
@@ -251,6 +272,21 @@ public class Element extends Node {
      */
     public Element child(int index) {
         return childElementsList().get(index);
+    }
+
+    /**
+     * Get the number of child nodes of this element that are elements.
+     * <p>
+     * This method works on the same filtered list like {@link #child(int)}. Use {@link #childNodes()} and {@link
+     * #childNodeSize()} to get the unfiltered Nodes (e.g. includes TextNodes etc.)
+     * </p>
+     *
+     * @return the number of child nodes that are elements
+     * @see #children()
+     * @see #child(int)
+     */
+    public int childrenSize() {
+        return childElementsList().size();
     }
 
     /**
@@ -341,21 +377,19 @@ public class Element extends Node {
     /**
      * Find elements that match the {@link Selector} CSS query, with this element as the starting context. Matched elements
      * may include this element, or any of its children.
-     * <p>
-     * This method is generally more powerful to use than the DOM-type {@code getElementBy*} methods, because
-     * multiple filters can be combined, e.g.:
-     * </p>
+     * <p>This method is generally more powerful to use than the DOM-type {@code getElementBy*} methods, because
+     * multiple filters can be combined, e.g.:</p>
      * <ul>
      * <li>{@code el.select("a[href]")} - finds links ({@code a} tags with {@code href} attributes)
      * <li>{@code el.select("a[href*=example.com]")} - finds links pointing to example.com (loosely)
      * </ul>
-     * <p>
-     * See the query syntax documentation in {@link org.jsoup.select.Selector}.
-     * </p>
+     * <p>See the query syntax documentation in {@link org.jsoup.select.Selector}.</p>
+     * <p>Also known as {@code querySelectorAll()} in the Web DOM.</p>
      * 
      * @param cssQuery a {@link Selector} CSS-like query
-     * @return elements that match the query (empty if none match)
-     * @see org.jsoup.select.Selector
+     * @return an {@link Elements} list containing elements that match the query (empty if none match)
+     * @see Selector selector query syntax
+     * @see QueryParser#parse(String)
      * @throws Selector.SelectorParseException (unchecked) on an invalid CSS query.
      */
     public Elements select(String cssQuery) {
@@ -363,9 +397,22 @@ public class Element extends Node {
     }
 
     /**
+     * Find elements that match the supplied Evaluator. This has the same functionality as {@link #select(String)}, but
+     * may be useful if you are running the same query many times (on many documents) and want to save the overhead of
+     * repeatedly parsing the CSS query.
+     * @param evaluator an element evaluator
+     * @return an {@link Elements} list containing elements that match the query (empty if none match)
+     */
+    public Elements select(Evaluator evaluator) {
+        return Selector.select(evaluator, this);
+    }
+
+
+    /**
      * Find the first Element that matches the {@link Selector} CSS query, with this element as the starting context.
      * <p>This is effectively the same as calling {@code element.select(query).first()}, but is more efficient as query
      * execution stops on the first hit.</p>
+     * <p>Also known as {@code querySelector()} in the Web DOM.</p>
      * @param cssQuery cssQuery a {@link Selector} CSS-like query
      * @return the first matching element, or <b>{@code null}</b> if there is no match.
      */
@@ -374,7 +421,21 @@ public class Element extends Node {
     }
 
     /**
-     * Check if this element matches the given {@link Selector} CSS query.
+     * Finds the first Element that matches the supplied Evaluator, with this element as the starting context, or
+     * {@code null} if none match.
+     *
+     * @param evaluator an element evaluator
+     * @return the first matching element (walking down the tree, starting from this element), or {@code null} if none
+     *     matchn.
+     */
+    public Element selectFirst(Evaluator evaluator) {
+        return Collector.findFirst(evaluator, this);
+    }
+
+    /**
+     * Checks if this element matches the given {@link Selector} CSS query. Also knows as {@code matches()} in the Web
+     * DOM.
+     *
      * @param cssQuery a {@link Selector} CSS query
      * @return if this element matches the query
      */
@@ -388,7 +449,37 @@ public class Element extends Node {
      * @return if this element matches
      */
     public boolean is(Evaluator evaluator) {
-        return evaluator.matches((Element)this.root(), this);
+        return evaluator.matches(this.root(), this);
+    }
+
+    /**
+     * Find the closest element up the tree of parents that matches the specified CSS query. Will return itself, an
+     * ancestor, or {@code null} if there is no such matching element.
+     * @param cssQuery a {@link Selector} CSS query
+     * @return the closest ancestor element (possibly itself) that matches the provided evaluator. {@code null} if not
+     * found.
+     */
+    public Element closest(String cssQuery) {
+        return closest(QueryParser.parse(cssQuery));
+    }
+
+    /**
+     * Find the closest element up the tree of parents that matches the specified evaluator. Will return itself, an
+     * ancestor, or {@code null} if there is no such matching element.
+     * @param evaluator a query evaluator
+     * @return the closest ancestor element (possibly itself) that matches the provided evaluator. {@code null} if not
+     * found.
+     */
+    public Element closest(Evaluator evaluator) {
+        Validate.notNull(evaluator);
+        Element el = this;
+        final Element root = root();
+        do {
+            if (evaluator.matches(root, el))
+                return el;
+            el = el.parent();
+        } while (el != null);
+        return null;
     }
     
     /**
@@ -450,7 +541,7 @@ public class Element extends Node {
         Validate.isTrue(index >= 0 && index <= currentSize, "Insert position out of bounds.");
 
         ArrayList<Node> nodes = new ArrayList<>(children);
-        Node[] nodeArray = nodes.toArray(new Node[nodes.size()]);
+        Node[] nodeArray = nodes.toArray(new Node[0]);
         addChildren(index, nodeArray);
         return this;
     }
@@ -535,7 +626,7 @@ public class Element extends Node {
     public Element append(String html) {
         Validate.notNull(html);
         List<Node> nodes = NodeUtils.parser(this).parseFragmentInput(html, this, baseUri());
-        addChildren(nodes.toArray(new Node[nodes.size()]));
+        addChildren(nodes.toArray(new Node[0]));
         return this;
     }
     
@@ -548,7 +639,7 @@ public class Element extends Node {
     public Element prepend(String html) {
         Validate.notNull(html);
         List<Node> nodes = NodeUtils.parser(this).parseFragmentInput(html, this, baseUri());
-        addChildren(0, nodes.toArray(new Node[nodes.size()]));
+        addChildren(0, nodes.toArray(new Node[0]));
         return this;
     }
 
@@ -602,6 +693,7 @@ public class Element extends Node {
      * Remove all of the element's child nodes. Any attributes are left as-is.
      * @return this element
      */
+    @Override
     public Element empty() {
         childNodes.clear();
         return this;
@@ -679,8 +771,7 @@ public class Element extends Node {
     public Element nextElementSibling() {
         if (parentNode == null) return null;
         List<Element> siblings = parent().childElementsList();
-        Integer index = indexInList(this, siblings);
-        Validate.notNull(index);
+        int index = indexInList(this, siblings);
         if (siblings.size() > index+1)
             return siblings.get(index+1);
         else
@@ -704,8 +795,7 @@ public class Element extends Node {
     public Element previousElementSibling() {
         if (parentNode == null) return null;
         List<Element> siblings = parent().childElementsList();
-        Integer index = indexInList(this, siblings);
-        Validate.notNull(index);
+        int index = indexInList(this, siblings);
         if (index > 0)
             return siblings.get(index-1);
         else
@@ -1011,7 +1101,7 @@ public class Element extends Node {
     }
     
     /**
-     * Find elements whose text matches the supplied regular expression.
+     * Find elements whose own text matches the supplied regular expression.
      * @param regex regular expression to match text against. You can use <a href="http://java.sun.com/docs/books/tutorial/essential/regex/pattern.html#embedded">embedded flags</a> (such as (?i) and (?m) to control regex options.
      * @return elements matching the supplied regular expression.
      * @see Element#ownText()
@@ -1268,7 +1358,10 @@ public class Element extends Node {
      */
     // performance sensitive
     public boolean hasClass(String className) {
-        final String classAttr = attributes().getIgnoreCase("class");
+        if (!hasAttributes())
+            return false;
+
+        final String classAttr = attributes.getIgnoreCase("class");
         final int len = classAttr.length();
         final int wantLen = className.length();
 
@@ -1363,7 +1456,7 @@ public class Element extends Node {
      * @return the value of the form element, or empty string if not set.
      */
     public String val() {
-        if (tagName().equals("textarea"))
+        if (normalName().equals("textarea"))
             return text();
         else
             return attr("value");
@@ -1375,7 +1468,7 @@ public class Element extends Node {
      * @return this element (for chaining)
      */
     public Element val(String value) {
-        if (tagName().equals("textarea"))
+        if (normalName().equals("textarea"))
             text(value);
         else
             attr("value", value);
@@ -1383,7 +1476,7 @@ public class Element extends Node {
     }
 
     void outerHtmlHead(final Appendable accum, int depth, final Document.OutputSettings out) throws IOException {
-        if (out.prettyPrint() && (tag.formatAsBlock() || (parent() != null && parent().tag().formatAsBlock()) || out.outline())) {
+        if (out.prettyPrint() && isFormatAsBlock(out) && !isInlineable(out)) {
             if (accum instanceof StringBuilder) {
                 if (((StringBuilder) accum).length() > 0)
                     indent(accum, depth, out);
@@ -1405,7 +1498,7 @@ public class Element extends Node {
             accum.append('>');
     }
 
-	void outerHtmlTail(Appendable accum, int depth, Document.OutputSettings out) throws IOException {
+    void outerHtmlTail(Appendable accum, int depth, Document.OutputSettings out) throws IOException {
         if (!(childNodes.isEmpty() && tag.isSelfClosing())) {
             if (out.prettyPrint() && (!childNodes.isEmpty() && (
                     tag.formatAsBlock() || (out.outline() && (childNodes.size()>1 || (childNodes.size()==1 && !(childNodes.get(0) instanceof TextNode))))
@@ -1458,18 +1551,49 @@ public class Element extends Node {
     @Override
     public Element shallowClone() {
         // simpler than implementing a clone version with no child copy
-        return new Element(tag, baseUri, attributes);
+        return new Element(tag, baseUri(), attributes == null ? null : attributes.clone());
     }
 
     @Override
     protected Element doClone(Node parent) {
         Element clone = (Element) super.doClone(parent);
         clone.attributes = attributes != null ? attributes.clone() : null;
-        clone.baseUri = baseUri;
         clone.childNodes = new NodeList(clone, childNodes.size());
         clone.childNodes.addAll(childNodes); // the children then get iterated and cloned in Node.clone
+        clone.setBaseUri(baseUri());
 
         return clone;
+    }
+
+    // overrides of Node for call chaining
+    @Override
+    public Element clearAttributes() {
+        if (attributes != null) {
+            super.clearAttributes();
+            attributes = null;
+        }
+
+        return this;
+    }
+
+    @Override
+    public Element removeAttr(String attributeKey) {
+        return (Element) super.removeAttr(attributeKey);
+    }
+
+    @Override
+    public Element root() {
+        return (Element) super.root(); // probably a document, but always at least an element
+    }
+
+    @Override
+    public Element traverse(NodeVisitor nodeVisitor) {
+        return  (Element) super.traverse(nodeVisitor);
+    }
+
+    @Override
+    public Element filter(NodeFilter nodeFilter) {
+        return  (Element) super.filter(nodeFilter);
     }
 
     private static final class NodeList extends ChangeNotifyingArrayList<Node> {
@@ -1483,5 +1607,17 @@ public class Element extends Node {
         public void onContentsChanged() {
             owner.nodelistChanged();
         }
+    }
+
+    private boolean isFormatAsBlock(Document.OutputSettings out) {
+        return tag.formatAsBlock() || (parent() != null && parent().tag().formatAsBlock()) || out.outline();
+    }
+
+    private boolean isInlineable(Document.OutputSettings out) {
+        return tag().isInline()
+            && !tag().isEmpty()
+            && parent().isBlock()
+            && previousSibling() != null
+            && !out.outline();
     }
 }

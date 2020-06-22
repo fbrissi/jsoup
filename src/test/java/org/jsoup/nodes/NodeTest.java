@@ -4,11 +4,12 @@ import org.jsoup.Jsoup;
 import org.jsoup.TextUtil;
 import org.jsoup.parser.Tag;
 import org.jsoup.select.NodeVisitor;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
+
 /**
  Tests Nodes
 
@@ -31,14 +32,14 @@ public class NodeTest {
 
         Element dodgyBase = new Element(tag, "wtf://no-such-protocol/", attribs);
         assertEquals("http://bar/qux", dodgyBase.absUrl("absHref")); // base fails, but href good, so get that
-        assertEquals("", dodgyBase.absUrl("relHref")); // base fails, only rel href, so return nothing 
+        assertEquals("", dodgyBase.absUrl("relHref")); // base fails, only rel href, so return nothing
     }
 
     @Test public void setBaseUriIsRecursive() {
         Document doc = Jsoup.parse("<div><p></p></div>");
         String baseUri = "https://jsoup.org";
         doc.setBaseUri(baseUri);
-        
+
         assertEquals(baseUri, doc.baseUri());
         assertEquals(baseUri, doc.select("div").first().baseUri());
         assertEquals(baseUri, doc.select("p").first().baseUri());
@@ -130,30 +131,30 @@ public class NodeTest {
         Element a1 = doc.select("a").first();
         assertEquals("http://example.com/one/two.html", a1.absUrl("href"));
     }
-    
+
     @Test public void testRemove() {
         Document doc = Jsoup.parse("<p>One <span>two</span> three</p>");
         Element p = doc.select("p").first();
         p.childNode(0).remove();
-        
+
         assertEquals("two three", p.text());
         assertEquals("<span>two</span> three", TextUtil.stripNewlines(p.html()));
     }
-    
+
     @Test public void testReplace() {
         Document doc = Jsoup.parse("<p>One <span>two</span> three</p>");
         Element p = doc.select("p").first();
         Element insert = doc.createElement("em").text("foo");
         p.childNode(1).replaceWith(insert);
-        
+
         assertEquals("One <em>foo</em> three", p.html());
     }
-    
+
     @Test public void ownerDocument() {
         Document doc = Jsoup.parse("<p>Hello");
         Element p = doc.select("p").first();
-        assertTrue(p.ownerDocument() == doc);
-        assertTrue(doc.ownerDocument() == doc);
+        assertSame(p.ownerDocument(), doc);
+        assertSame(doc.ownerDocument(), doc);
         assertNull(doc.parent());
     }
 
@@ -161,15 +162,15 @@ public class NodeTest {
         Document doc = Jsoup.parse("<div><p>Hello");
         Element p = doc.select("p").first();
         Node root = p.root();
-        assertTrue(doc == root);
+        assertSame(doc, root);
         assertNull(root.parent());
-        assertTrue(doc.root() == doc);
-        assertTrue(doc.root() == doc.ownerDocument());
+        assertSame(doc.root(), doc);
+        assertSame(doc.root(), doc.ownerDocument());
 
         Element standAlone = new Element(Tag.valueOf("p"), "");
-        assertTrue(standAlone.parent() == null);
-        assertTrue(standAlone.root() == standAlone);
-        assertTrue(standAlone.ownerDocument() == null);
+        assertNull(standAlone.parent());
+        assertSame(standAlone.root(), standAlone);
+        assertNull(standAlone.ownerDocument());
     }
 
     @Test public void before() {
@@ -214,19 +215,21 @@ public class NodeTest {
         Element span = doc.select("span").first();
         Node node = span.unwrap();
         assertEquals("<div>One  Two</div>", TextUtil.stripNewlines(doc.body().html()));
-        assertTrue(node == null);
+        assertNull(node);
     }
 
     @Test public void traverse() {
         Document doc = Jsoup.parse("<div><p>Hello</p></div><div>There</div>");
         final StringBuilder accum = new StringBuilder();
         doc.select("div").first().traverse(new NodeVisitor() {
+            @Override
             public void head(Node node, int depth) {
-                accum.append("<" + node.nodeName() + ">");
+                accum.append("<").append(node.nodeName()).append(">");
             }
 
+            @Override
             public void tail(Node node, int depth) {
-                accum.append("</" + node.nodeName() + ">");
+                accum.append("</").append(node.nodeName()).append(">");
             }
         });
         assertEquals("<div><p><#text></#text></p></div>", accum.toString());
@@ -280,14 +283,14 @@ public class NodeTest {
 
         Element elClone = doc.clone().select("div").first();
         assertTrue(elClone.hasClass("foo"));
-        assertTrue(elClone.text().equals("Text"));
+        assertEquals("Text", elClone.text());
 
         el.removeClass("foo");
         el.text("None");
         assertFalse(el.hasClass("foo"));
         assertTrue(elClone.hasClass("foo"));
-        assertTrue(el.text().equals("None"));
-        assertTrue(elClone.text().equals("Text"));
+        assertEquals("None", el.text());
+        assertEquals("Text", elClone.text());
     }
 
     @Test public void changingAttributeValueShouldReplaceExistingAttributeCaseInsensitive() {
@@ -296,22 +299,22 @@ public class NodeTest {
 
         inputElement.attr("value","bar");
 
-        assertEquals(singletonAttributes("value", "bar"), getAttributesCaseInsensitive(inputElement, "value"));
+        assertEquals(singletonAttributes(), getAttributesCaseInsensitive(inputElement));
     }
 
-    private Attributes getAttributesCaseInsensitive(Element element, String attributeName) {
+    private Attributes getAttributesCaseInsensitive(Element element) {
         Attributes matches = new Attributes();
         for (Attribute attribute : element.attributes()) {
-            if (attribute.getKey().equalsIgnoreCase(attributeName)) {
+            if (attribute.getKey().equalsIgnoreCase("value")) {
                 matches.put(attribute);
             }
         }
         return matches;
     }
 
-    private Attributes singletonAttributes(String key, String value) {
+    private Attributes singletonAttributes() {
         Attributes attributes = new Attributes();
-        attributes.put(key, value);
+        attributes.put("value", "bar");
         return attributes;
     }
 }

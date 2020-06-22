@@ -1,33 +1,26 @@
 package org.jsoup.integration;
 
 import org.jsoup.Connection;
+import org.jsoup.HttpStatusException;
 import org.jsoup.Jsoup;
-import org.jsoup.UncheckedIOException;
-import org.jsoup.integration.servlets.Deflateservlet;
-import org.jsoup.integration.servlets.EchoServlet;
-import org.jsoup.integration.servlets.HelloServlet;
-import org.jsoup.integration.servlets.InterruptedServlet;
-import org.jsoup.integration.servlets.RedirectServlet;
-import org.jsoup.integration.servlets.SlowRider;
+import org.jsoup.integration.servlets.*;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.junit.Ignore;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.MalformedURLException;
-import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.util.Map;
 
+import static org.jsoup.helper.HttpConnection.CONTENT_TYPE;
+import static org.jsoup.helper.HttpConnection.MULTIPART_FORM_DATA;
 import static org.jsoup.integration.UrlConnectTest.browserUa;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Tests Jsoup.connect against a local server.
@@ -35,13 +28,13 @@ import static org.junit.Assert.assertTrue;
 public class ConnectTest {
     private static String echoUrl;
 
-    @BeforeClass
+    @BeforeAll
     public static void setUp() {
         TestServer.start();
         echoUrl = EchoServlet.Url;
     }
 
-    @AfterClass
+    @AfterAll
     public static void tearDown() {
         TestServer.stop();
     }
@@ -61,7 +54,7 @@ public class ConnectTest {
     }
 
     @Test
-    public void fetchURIWithWihtespace() throws IOException {
+    public void fetchURIWithWhitespace() throws IOException {
         Connection con = Jsoup.connect(echoUrl + "#with whitespaces");
         Document doc = con.get();
         assertTrue(doc.title().contains("Environment Variables"));
@@ -87,6 +80,36 @@ public class ConnectTest {
     }
 
     @Test
+    public void throwsExceptionOn404() {
+        String url = EchoServlet.Url;
+        Connection con = Jsoup.connect(url).header(EchoServlet.CodeParam, "404");
+
+        boolean threw = false;
+        try {
+            Document doc = con.get();
+        } catch (HttpStatusException e) {
+            threw = true;
+            assertEquals("org.jsoup.HttpStatusException: HTTP error fetching URL. Status=404, URL=" + e.getUrl(), e.toString());
+            assertTrue(e.getUrl().startsWith(url));
+            assertEquals(404, e.getStatusCode());
+        } catch (IOException e) {
+        }
+        assertTrue(threw);
+    }
+
+    @Test
+    public void ignoresExceptionIfSoConfigured() throws IOException {
+        String url = EchoServlet.Url;
+        Connection con = Jsoup.connect(url)
+            .header(EchoServlet.CodeParam, "404")
+            .ignoreHttpErrors(true);
+        Connection.Response res = con.execute();
+        Document doc = res.parse();
+        assertEquals(404, res.statusCode());
+        assertEquals("Webserver Environment Variables", doc.title());
+    }
+
+    @Test
     public void doesPost() throws IOException {
         Document doc = Jsoup.connect(echoUrl)
             .data("uname", "Jsoup", "uname", "Jonathan", "百", "度一下")
@@ -99,6 +122,21 @@ public class ConnectTest {
         assertEquals("度一下", ihVal("百", doc));
         assertEquals("Jsoup, Jonathan", ihVal("uname", doc));
         assertEquals("application/x-www-form-urlencoded; charset=UTF-8", ihVal("Content-Type", doc));
+    }
+
+    @Test
+    public void doesPostMultipartWithoutInputstream() throws IOException {
+        Document doc = Jsoup.connect(echoUrl)
+                .header(CONTENT_TYPE, MULTIPART_FORM_DATA)
+                .userAgent(browserUa)
+                .data("uname", "Jsoup", "uname", "Jonathan", "百", "度一下")
+                .post();
+
+        assertTrue(ihVal("Content-Type", doc).contains(MULTIPART_FORM_DATA));
+
+        assertTrue(ihVal("Content-Type", doc).contains("boundary")); // should be automatically set
+        assertEquals("Jsoup, Jonathan", ihVal("uname", doc));
+        assertEquals("度一下", ihVal("百", doc));
     }
 
     @Test
@@ -184,109 +222,13 @@ public class ConnectTest {
         assertEquals("auth=token", ihVal("Cookie", doc));
     }
 
-    // Slow Rider tests. Ignored by default so tests don't take aaages
-    @Ignore
-    @Test public void canInterruptBodyStringRead() throws IOException, InterruptedException {
-        // todo - implement in interruptable channels, so it's immediate
-        final String[] body = new String[1];
-        Thread runner = new Thread(new Runnable() {
-            public void run() {
-                try {
-                    Connection.Response res = Jsoup.connect(SlowRider.Url)
-                        .timeout(15 * 1000)
-                        .execute();
-                    body[0] = res.body();
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-
-            }
-        });
-
-        runner.start();
-        Thread.sleep(1000 * 3);
-        runner.interrupt();
-        assertTrue(runner.isInterrupted());
-        runner.join();
-
-        assertTrue(body[0].length() > 0);
-        assertTrue(body[0].contains("<p>Are you still there?"));
-    }
-
-    @Ignore
-    @Test public void canInterruptDocumentRead() throws IOException, InterruptedException {
-        // todo - implement in interruptable channels, so it's immediate
-        final String[] body = new String[1];
-        Thread runner = new Thread(new Runnable() {
-            public void run() {
-                try {
-                    Connection.Response res = Jsoup.connect(SlowRider.Url)
-                        .timeout(15 * 1000)
-                        .execute();
-                    body[0] = res.parse().text();
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-
-            }
-        });
-
-        runner.start();
-        Thread.sleep(1000 * 3);
-        runner.interrupt();
-        assertTrue(runner.isInterrupted());
-        runner.join();
-
-        assertTrue(body[0].length() == 0); // doesn't ready a failed doc
-    }
-
-    @Ignore
-    @Test public void totalTimeout() throws IOException {
-        int timeout = 3 * 1000;
-        long start = System.currentTimeMillis();
-        boolean threw = false;
-        try {
-            Jsoup.connect(SlowRider.Url).timeout(timeout).get();
-        } catch (SocketTimeoutException e) {
-            long end = System.currentTimeMillis();
-            long took = end - start;
-            assertTrue(("Time taken was " + took), took > timeout);
-            assertTrue(("Time taken was " + took), took < timeout * 1.2);
-            threw = true;
-        }
-
-        assertTrue(threw);
-    }
-
-    @Ignore
-    @Test public void slowReadOk() throws IOException {
-        // make sure that a slow read that is under the request timeout is still OK
-        Document doc = Jsoup.connect(SlowRider.Url)
-            .data(SlowRider.MaxTimeParam, "2000") // the request completes in 2 seconds
-            .get();
-
-        Element h1 = doc.selectFirst("h1");
-        assertEquals("outatime", h1.text());
-    }
-
-    @Ignore
-    @Test public void infiniteReadSupported() throws IOException {
-        Document doc = Jsoup.connect(SlowRider.Url)
-            .timeout(0)
-            .data(SlowRider.MaxTimeParam, "2000")
-            .get();
-
-        Element h1 = doc.selectFirst("h1");
-        assertEquals("outatime", h1.text());
-    }
-
     /**
      * Tests upload of content to a remote service.
      */
     @Test
     public void postFiles() throws IOException {
         File thumb = ParseTest.getFile("/htmltests/thumb.jpg");
-        File html = ParseTest.getFile("/htmltests/google-ipod.html");
+        File html = ParseTest.getFile("/htmltests/google-ipod.html.gz");
 
         Document res = Jsoup
             .connect(EchoServlet.Url)
@@ -300,8 +242,8 @@ public class ConnectTest {
 
         assertEquals("application/octet-stream", ihVal("Part secondPart ContentType", res));
         assertEquals("secondPart", ihVal("Part secondPart Name", res));
-        assertEquals("google-ipod.html", ihVal("Part secondPart Filename", res));
-        assertEquals("43963", ihVal("Part secondPart Size", res));
+        assertEquals("google-ipod.html.gz", ihVal("Part secondPart Filename", res));
+        assertEquals("12212", ihVal("Part secondPart Size", res));
 
         assertEquals("image/jpeg", ihVal("Part firstPart ContentType", res));
         assertEquals("firstPart", ihVal("Part firstPart Name", res));
@@ -323,7 +265,8 @@ public class ConnectTest {
          */
     }
 
-    @Test public void multipleParsesOkAfterBufferUp() throws IOException {
+    @Test
+    public void multipleParsesOkAfterBufferUp() throws IOException {
         Connection.Response res = Jsoup.connect(echoUrl).execute().bufferUp();
 
         Document doc = res.parse();
@@ -333,13 +276,17 @@ public class ConnectTest {
         assertTrue(doc2.title().contains("Environment"));
     }
 
-    @Test(expected=IllegalArgumentException.class) public void bodyAfterParseThrowsValidationError() throws IOException {
-        Connection.Response res = Jsoup.connect(echoUrl).execute();
-        Document doc = res.parse();
-        String body = res.body();
+    @Test
+    public void bodyAfterParseThrowsValidationError() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            Connection.Response res = Jsoup.connect(echoUrl).execute();
+            Document doc = res.parse();
+            String body = res.body();
+        });
     }
 
-    @Test public void bodyAndBytesAvailableBeforeParse() throws IOException {
+    @Test
+    public void bodyAndBytesAvailableBeforeParse() throws IOException {
         Connection.Response res = Jsoup.connect(echoUrl).execute();
         String body = res.body();
         assertTrue(body.contains("Environment"));
@@ -350,17 +297,24 @@ public class ConnectTest {
         assertTrue(doc.title().contains("Environment"));
     }
 
-    @Test(expected=IllegalArgumentException.class) public void parseParseThrowsValidates() throws IOException {
-        Connection.Response res = Jsoup.connect(echoUrl).execute();
-        Document doc = res.parse();
-        assertTrue(doc.title().contains("Environment"));
-        Document doc2 = res.parse(); // should blow up because the response input stream has been drained
+    @Test
+    public void parseParseThrowsValidates() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            Connection.Response res = Jsoup.connect(echoUrl).execute();
+            Document doc = res.parse();
+            assertTrue(doc.title().contains("Environment"));
+            Document doc2 = res.parse(); // should blow up because the response input stream has been drained
+        });
     }
 
 
     @Test
     public void multiCookieSet() throws IOException {
-        Connection con = Jsoup.connect("http://direct.infohound.net/tools/302-cookie.pl");
+        Connection con = Jsoup
+                .connect(RedirectServlet.Url)
+                .data(RedirectServlet.CodeParam, "302")
+                .data(RedirectServlet.SetCookiesParam, "true")
+                .data(RedirectServlet.LocationParam, echoUrl);
         Connection.Response res = con.execute();
 
         // test cookies set by redirect:
@@ -383,36 +337,32 @@ public class ConnectTest {
     }
 
     @Test
-    public void handlesEmptyStreamDuringParseRead() throws IOException {
+    public void handlesLargerContentLengthParseRead() throws IOException {
         // this handles situations where the remote server sets a content length greater than it actually writes
 
         Connection.Response res = Jsoup.connect(InterruptedServlet.Url)
-            .timeout(200)
+            .data(InterruptedServlet.Magnitude, InterruptedServlet.Larger)
+            .timeout(400)
             .execute();
 
-        boolean threw = false;
-        try {
-            Document document = res.parse();
-            assertEquals("Something", document.title());
-        } catch (IOException e) {
-            threw = true;
-        }
-        assertTrue(threw);
+        Document document = res.parse();
+        assertEquals("Something", document.title());
+        assertEquals(0, document.select("p").size());
+        // current impl, jetty won't write past content length
+        // todo - find way to trick jetty into writing larger than set header. Take over the stream?
     }
 
     @Test
-    public void handlesEmtpyStreamDuringBufferdRead() throws IOException {
+    public void handlesWrongContentLengthDuringBufferedRead() throws IOException {
         Connection.Response res = Jsoup.connect(InterruptedServlet.Url)
-            .timeout(200)
-            .execute();
+                .timeout(400)
+                .execute();
+        // this servlet writes max_buffer data, but sets content length to max_buffer/2. So will read up to that.
+        // previous versions of jetty would allow to write less, and would throw except here
 
-        boolean threw = false;
-        try {
-            res.bufferUp();
-        } catch (UncheckedIOException e) {
-            threw = true;
-        }
-        assertTrue(threw);
+        res.bufferUp();
+        Document doc = res.parse();
+        assertEquals(0, doc.select("p").size());
     }
 
     @Test public void handlesRedirect() throws IOException {
@@ -426,7 +376,7 @@ public class ConnectTest {
         assertEquals(HelloServlet.Url, doc.location());
     }
 
-    @Test public void handlesEmptyRedirect() throws IOException {
+    @Test public void handlesEmptyRedirect() {
         boolean threw = false;
         try {
             Connection.Response res = Jsoup.connect(RedirectServlet.Url)
@@ -459,5 +409,71 @@ public class ConnectTest {
         assertEquals(EchoServlet.Url, doc.location());
         assertEquals("POST", ihVal("Method", doc));
         assertEquals("there", ihVal("Hello", doc));
+    }
+
+    @Test public void getUtf8Bom() throws IOException {
+        Connection con = Jsoup.connect(FileServlet.urlTo("/bomtests/bom_utf8.html"));
+        Document doc = con.get();
+
+        assertEquals("UTF-8", con.response().charset());
+        assertEquals("OK", doc.title());
+    }
+
+    @Test
+    public void testBinaryContentTypeThrowsException() {
+        Connection con = Jsoup.connect(FileServlet.urlTo("/htmltests/thumb.jpg"));
+        con.data(FileServlet.ContentTypeParam, "image/jpeg");
+
+        boolean threw = false;
+        try {
+            con.execute();
+            Document doc = con.response().parse();
+        } catch (IOException e) {
+            threw = true;
+            assertEquals("Unhandled content type. Must be text/*, application/xml, or application/*+xml", e.getMessage());
+        }
+        assertTrue(threw);
+    }
+
+    @Test public void testParseRss() throws IOException {
+        // test that we switch automatically to xml, and we support application/rss+xml
+        Connection con = Jsoup.connect(FileServlet.urlTo("/htmltests/test-rss.xml"));
+        con.data(FileServlet.ContentTypeParam, "application/rss+xml");
+        Document doc = con.get();
+        Element title = doc.selectFirst("title");
+        assertEquals("jsoup RSS news", title.text());
+        assertEquals("channel", title.parent().nodeName());
+        assertEquals("jsoup RSS news", doc.title());
+        assertEquals(3, doc.select("link").size());
+        assertEquals("application/rss+xml", con.response().contentType());
+        assertEquals(Document.OutputSettings.Syntax.xml, doc.outputSettings().syntax());
+    }
+
+    @Test
+    public void canFetchBinaryAsBytes() throws IOException {
+        Connection.Response res = Jsoup.connect(FileServlet.urlTo("/htmltests/thumb.jpg"))
+            .data(FileServlet.ContentTypeParam, "image/jpeg")
+            .ignoreContentType(true)
+            .execute();
+
+        byte[] bytes = res.bodyAsBytes();
+        assertEquals(1052, bytes.length);
+    }
+
+    @Test
+    public void handlesUnknownEscapesAcrossBuffer() throws IOException {
+        String localPath = "/htmltests/escapes-across-buffer.html";
+        String url =
+            "https://gist.githubusercontent.com/krystiangorecki/d3bad50ef5615f06b077438607423533/raw/71adfdf81121282ea936510ed6cfe440adeb2d83/JsoupIssue1218.html";
+        String localUrl = FileServlet.urlTo(localPath);
+
+        Document docFromGithub = Jsoup.connect(url).get(); // different chunks meant GH would error but local not...
+        Document docFromLocalServer = Jsoup.connect(localUrl).get();
+        Document docFromFileRead = Jsoup.parse(ParseTest.getFile(localPath), "UTF-8");
+
+        String text = docFromGithub.body().text();
+        assertEquals(14766, text.length());
+        assertEquals(text, docFromLocalServer.body().text());
+        assertEquals(text, docFromFileRead.body().text());
     }
 }

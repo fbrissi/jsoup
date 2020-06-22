@@ -1,11 +1,11 @@
 package org.jsoup.nodes;
 
 import org.jsoup.Jsoup;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import static org.jsoup.nodes.Document.OutputSettings;
 import static org.jsoup.nodes.Entities.EscapeMode.*;
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class EntitiesTest {
     @Test public void escape() {
@@ -31,7 +31,7 @@ public class EntitiesTest {
         assertEquals(text, Entities.unescape(escapedUtfMin));
     }
 
-    @Test public void escapedSupplemtary() {
+    @Test public void escapedSupplementary() {
         String text = "\uD835\uDD59";
         String escapedAscii = Entities.escape(text, new OutputSettings().charset("ascii").escapeMode(base));
         assertEquals("&#x1d559;", escapedAscii);
@@ -51,7 +51,6 @@ public class EntitiesTest {
     }
 
     @Test public void xhtml() {
-        String text = "&amp; &gt; &lt; &quot;";
         assertEquals(38, xhtml.codepointForName("amp"));
         assertEquals(62, xhtml.codepointForName("gt"));
         assertEquals(60, xhtml.codepointForName("lt"));
@@ -104,20 +103,20 @@ public class EntitiesTest {
         assertEquals("Hello &= &", Entities.unescape(text, false));
     }
 
-    
+
     @Test public void caseSensitive() {
         String unescaped = "Ü ü & &";
         assertEquals("&Uuml; &uuml; &amp; &amp;",
                 Entities.escape(unescaped, new OutputSettings().charset("ascii").escapeMode(extended)));
-        
+
         String escaped = "&Uuml; &uuml; &amp; &AMP";
         assertEquals("Ü ü & &", Entities.unescape(escaped));
     }
-    
+
     @Test public void quoteReplacements() {
         String escaped = "&#92; &#36;";
         String unescaped = "\\ $";
-        
+
         assertEquals(unescaped, Entities.unescape(escaped));
     }
 

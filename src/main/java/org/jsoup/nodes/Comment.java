@@ -10,24 +10,12 @@ import java.io.IOException;
 
  @author Jonathan Hedley, jonathan@hedley.net */
 public class Comment extends LeafNode {
-    private static final String COMMENT_KEY = "comment";
-
     /**
      Create a new comment node.
      @param data The contents of the comment
      */
     public Comment(String data) {
         value = data;
-    }
-
-    /**
-     Create a new comment node.
-     @param data The contents of the comment
-     @param baseUri base URI not used. This is a leaf node.
-     @deprecated
-     */
-    public Comment(String data, String baseUri) {
-        this(data);
     }
 
     public String nodeName() {
@@ -42,8 +30,13 @@ public class Comment extends LeafNode {
         return coreValue();
     }
 
+    public Comment setData(String data) {
+        coreValue(data);
+        return this;
+    }
+
 	void outerHtmlHead(Appendable accum, int depth, Document.OutputSettings out) throws IOException {
-        if (out.prettyPrint())
+        if (out.prettyPrint() && ((siblingIndex() == 0 && parentNode instanceof Element && ((Element) parentNode).tag().formatAsBlock()) || (out.outline() )))
             indent(accum, depth, out);
         accum
                 .append("<!--")
@@ -56,6 +49,11 @@ public class Comment extends LeafNode {
     @Override
     public String toString() {
         return outerHtml();
+    }
+
+    @Override
+    public Comment clone() {
+        return (Comment) super.clone();
     }
 
     /**
@@ -75,7 +73,7 @@ public class Comment extends LeafNode {
         String data = getData();
         Document doc = Jsoup.parse("<" + data.substring(1, data.length() -1) + ">", baseUri(), Parser.xmlParser());
         XmlDeclaration decl = null;
-        if (doc.childNodeSize() > 0) {
+        if (doc.children().size() > 0) {
             Element el = doc.child(0);
             decl = new XmlDeclaration(NodeUtils.parser(doc).settings().normalizeTag(el.tagName()), data.startsWith("!"));
             decl.attributes().addAll(el.attributes());

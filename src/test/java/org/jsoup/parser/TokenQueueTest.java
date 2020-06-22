@@ -1,9 +1,10 @@
 package org.jsoup.parser;
 
 import org.jsoup.Jsoup;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Token queue tests.
@@ -81,5 +82,17 @@ public class TokenQueueTest {
 
     private static void validateNestedQuotes(String html, String selector) {
         assertEquals("#identifier", Jsoup.parse(html).select(selector).first().cssSelector());
+    }
+
+    @Test
+    public void chompBalancedThrowIllegalArgumentException() {
+        try {
+            TokenQueue tq = new TokenQueue("unbalanced(something(or another)) else");
+            tq.consumeTo("(");
+            tq.chompBalanced('(', '+');
+            fail("should have thrown IllegalArgumentException");
+        } catch (IllegalArgumentException expected) {
+            assertEquals("Did not find balanced marker at 'something(or another)) else'", expected.getMessage());
+        }
     }
 }

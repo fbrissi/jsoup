@@ -1,19 +1,15 @@
 package org.jsoup.parser;
 
-import java.io.UnsupportedEncodingException;
 import org.jsoup.Jsoup;
-import org.jsoup.nodes.Attribute;
-import org.jsoup.nodes.Comment;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
-import org.jsoup.nodes.TextNode;
+import org.jsoup.nodes.*;
 import org.jsoup.select.Elements;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+
+import java.io.UnsupportedEncodingException;
+import java.util.Arrays;
 
 import static org.jsoup.parser.CharacterReader.maxBufferLen;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class TokeniserTest {
     @Test
@@ -33,13 +29,13 @@ public class TokeniserTest {
             }
 
             sb.append('X'); // First character to cross character buffer boundary
-            sb.append(tail + quote + ">\n");
+            sb.append(tail).append(quote).append(">\n");
 
             String html = sb.toString();
             Document doc = Jsoup.parse(html);
             String src = doc.select("img").attr("src");
 
-            assertTrue("Handles for quote " + quote, src.contains("X"));
+            assertTrue(src.contains("X"), "Handles for quote " + quote);
             assertTrue(src.contains(tail));
         }
     }
@@ -177,7 +173,40 @@ public class TokeniserTest {
             // some of these characters are illegal
             if (s.charAt(0) == '\ufffd') { continue; }
 
-            assertEquals("At: " + i, s.charAt(0), Tokeniser.win1252Extensions[i]);
+            assertEquals(s.charAt(0), Tokeniser.win1252Extensions[i], "At: " + i);
         }
+    }
+
+    @Test public void canParseVeryLongBogusComment() {
+        StringBuilder commentData = new StringBuilder(maxBufferLen);
+        do {
+            commentData.append("blah blah blah blah ");
+        } while (commentData.length() < maxBufferLen);
+        String expectedCommentData = commentData.toString();
+        String testMarkup = "<html><body><!" + expectedCommentData + "></body></html>";
+        Parser parser = new Parser(new HtmlTreeBuilder());
+
+        Document doc = parser.parseInput(testMarkup, "");
+
+        Node commentNode = doc.body().childNode(0);
+        assertTrue(commentNode instanceof Comment, "Expected comment node");
+        assertEquals(expectedCommentData, ((Comment)commentNode).getData());
+    }
+
+    @Test public void canParseCdataEndingAtEdgeOfBuffer() {
+        String cdataStart = "<![CDATA[";
+        String cdataEnd = "]]>";
+        int bufLen = maxBufferLen - cdataStart.length() - 1;    // also breaks with -2, but not with -3 or 0
+        char[] cdataContentsArray = new char[bufLen];
+        Arrays.fill(cdataContentsArray, 'x');
+        String cdataContents = new String(cdataContentsArray);
+        String testMarkup = cdataStart + cdataContents + cdataEnd;
+        Parser parser = new Parser(new HtmlTreeBuilder());
+
+        Document doc = parser.parseInput(testMarkup, "");
+
+        Node cdataNode = doc.body().childNode(0);
+        assertTrue(cdataNode instanceof CDataNode, "Expected CDATA node");
+        assertEquals(cdataContents, ((CDataNode)cdataNode).text());
     }
 }

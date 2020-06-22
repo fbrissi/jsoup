@@ -2,17 +2,12 @@ package org.jsoup.select;
 
 import org.jsoup.Jsoup;
 import org.jsoup.TextUtil;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
-import org.jsoup.nodes.FormElement;
-import org.jsoup.nodes.Node;
-import org.junit.Test;
+import org.jsoup.nodes.*;
+import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  Tests for ElementList.
@@ -46,7 +41,7 @@ public class ElementsTest {
         assertEquals("classy", ps.last().attr("style"));
         assertEquals("bar", ps.last().attr("class"));
     }
-    
+
     @Test public void hasAttr() {
         Document doc = Jsoup.parse("<p title=foo><p title=bar><p class=foo><p class=bar>");
         Elements ps = doc.select("p");
@@ -63,7 +58,7 @@ public class ElementsTest {
         assertTrue(two.hasAttr("abs:href"));
         assertTrue(both.hasAttr("abs:href")); // hits on #2
     }
-    
+
     @Test public void attr() {
         Document doc = Jsoup.parse("<p title=foo><p title=bar><p class=foo><p class=bar>");
         String classVal = doc.select("p").attr("class");
@@ -110,7 +105,7 @@ public class ElementsTest {
         assertTrue(thr.hasClass("ThreE"));
         assertTrue(thr.hasClass("three"));
     }
-    
+
     @Test public void text() {
         String h = "<div><p>Hello<p>there<p>world</div>";
         Document doc = Jsoup.parse(h);
@@ -123,49 +118,49 @@ public class ElementsTest {
         assertTrue(divs.hasText());
         assertFalse(doc.select("div + div").hasText());
     }
-    
+
     @Test public void html() {
         Document doc = Jsoup.parse("<div><p>Hello</p></div><div><p>There</p></div>");
         Elements divs = doc.select("div");
         assertEquals("<p>Hello</p>\n<p>There</p>", divs.html());
     }
-    
+
     @Test public void outerHtml() {
         Document doc = Jsoup.parse("<div><p>Hello</p></div><div><p>There</p></div>");
         Elements divs = doc.select("div");
         assertEquals("<div><p>Hello</p></div><div><p>There</p></div>", TextUtil.stripNewlines(divs.outerHtml()));
     }
-    
+
     @Test public void setHtml() {
         Document doc = Jsoup.parse("<p>One</p><p>Two</p><p>Three</p>");
         Elements ps = doc.select("p");
-        
+
         ps.prepend("<b>Bold</b>").append("<i>Ital</i>");
         assertEquals("<p><b>Bold</b>Two<i>Ital</i></p>", TextUtil.stripNewlines(ps.get(1).outerHtml()));
-        
+
         ps.html("<span>Gone</span>");
         assertEquals("<p><span>Gone</span></p>", TextUtil.stripNewlines(ps.get(1).outerHtml()));
     }
-    
+
     @Test public void val() {
         Document doc = Jsoup.parse("<input value='one' /><textarea>two</textarea>");
         Elements els = doc.select("input, textarea");
         assertEquals(2, els.size());
         assertEquals("one", els.val());
         assertEquals("two", els.last().val());
-        
+
         els.val("three");
         assertEquals("three", els.first().val());
         assertEquals("three", els.last().val());
         assertEquals("<textarea>three</textarea>", els.last().outerHtml());
     }
-    
+
     @Test public void before() {
         Document doc = Jsoup.parse("<p>This <a>is</a> <a>jsoup</a>.</p>");
         doc.select("a").before("<span>foo</span>");
         assertEquals("<p>This <span>foo</span><a>is</a> <span>foo</span><a>jsoup</a>.</p>", TextUtil.stripNewlines(doc.body().html()));
     }
-    
+
     @Test public void after() {
         Document doc = Jsoup.parse("<p>This <a>is</a> <a>jsoup</a>.</p>");
         doc.select("a").after("<span>foo</span>");
@@ -219,18 +214,18 @@ public class ElementsTest {
     @Test public void remove() {
         Document doc = Jsoup.parse("<div><p>Hello <b>there</b></p> jsoup <p>now!</p></div>");
         doc.outputSettings().prettyPrint(false);
-        
+
         doc.select("p").remove();
         assertEquals("<div> jsoup </div>", doc.body().html());
     }
-    
+
     @Test public void eq() {
         String h = "<p>Hello<p>there<p>world";
         Document doc = Jsoup.parse(h);
         assertEquals("there", doc.select("p").eq(1).text());
         assertEquals("there", doc.select("p").get(1).text());
     }
-    
+
     @Test public void is() {
         String h = "<p>Hello<p title=foo>there<p>world";
         Document doc = Jsoup.parse(h);
@@ -272,12 +267,14 @@ public class ElementsTest {
         Document doc = Jsoup.parse("<div><p>Hello</p></div><div>There</div>");
         final StringBuilder accum = new StringBuilder();
         doc.select("div").traverse(new NodeVisitor() {
+            @Override
             public void head(Node node, int depth) {
-                accum.append("<" + node.nodeName() + ">");
+                accum.append("<").append(node.nodeName()).append(">");
             }
 
+            @Override
             public void tail(Node node, int depth) {
-                accum.append("</" + node.nodeName() + ">");
+                accum.append("</").append(node.nodeName()).append(">");
             }
         });
         assertEquals("<div><p><#text></#text></p></div><div><#text></#text></div>", accum.toString());
@@ -290,10 +287,59 @@ public class ElementsTest {
 
         List<FormElement> forms = els.forms();
         assertEquals(2, forms.size());
-        assertTrue(forms.get(0) != null);
-        assertTrue(forms.get(1) != null);
+        assertNotNull(forms.get(0));
+        assertNotNull(forms.get(1));
         assertEquals("1", forms.get(0).id());
         assertEquals("2", forms.get(1).id());
+    }
+
+    @Test public void comments() {
+        Document doc = Jsoup.parse("<!-- comment1 --><p><!-- comment2 --><p class=two><!-- comment3 -->");
+        List<Comment> comments = doc.select("p").comments();
+        assertEquals(2, comments.size());
+        assertEquals(" comment2 ", comments.get(0).getData());
+        assertEquals(" comment3 ", comments.get(1).getData());
+
+        List<Comment> comments1 = doc.select("p.two").comments();
+        assertEquals(1, comments1.size());
+        assertEquals(" comment3 ", comments1.get(0).getData());
+    }
+
+    @Test public void textNodes() {
+        Document doc = Jsoup.parse("One<p>Two<a>Three</a><p>Four</p>Five");
+        List<TextNode> textNodes = doc.select("p").textNodes();
+        assertEquals(2, textNodes.size());
+        assertEquals("Two", textNodes.get(0).text());
+        assertEquals("Four", textNodes.get(1).text());
+    }
+
+    @Test public void dataNodes() {
+        Document doc = Jsoup.parse("<p>One</p><script>Two</script><style>Three</style>");
+        List<DataNode> dataNodes = doc.select("p, script, style").dataNodes();
+        assertEquals(2, dataNodes.size());
+        assertEquals("Two", dataNodes.get(0).getWholeData());
+        assertEquals("Three", dataNodes.get(1).getWholeData());
+
+        doc = Jsoup.parse("<head><script type=application/json><crux></script><script src=foo>Blah</script>");
+        Elements script = doc.select("script[type=application/json]");
+        List<DataNode> scriptNode = script.dataNodes();
+        assertEquals(1, scriptNode.size());
+        DataNode dataNode = scriptNode.get(0);
+        assertEquals("<crux>", dataNode.getWholeData());
+
+        // check if they're live
+        dataNode.setWholeData("<cromulent>");
+        assertEquals("<script type=\"application/json\"><cromulent></script>", script.outerHtml());
+    }
+
+    @Test public void nodesEmpty() {
+        Document doc = Jsoup.parse("<p>");
+        assertEquals(0, doc.select("form").textNodes().size());
+    }
+
+    @Test public void formElementsDescendButNotAccumulate() {
+        Document doc = Jsoup.parse("<div><div><form id=1>");
+        assertEquals(1, doc.select("div").forms().size());
     }
 
     @Test public void classWithHyphen() {

@@ -26,7 +26,7 @@ public class Attribute implements Map.Entry<String, String>, Cloneable  {
     /**
      * Create a new attribute from unencoded (raw) key and value.
      * @param key attribute key; case is preserved.
-     * @param value attribute value
+     * @param value attribute value (may be null)
      * @see #createFromEncoded
      */
     public Attribute(String key, String value) {
@@ -41,8 +41,9 @@ public class Attribute implements Map.Entry<String, String>, Cloneable  {
      * @see #createFromEncoded*/
     public Attribute(String key, String val, Attributes parent) {
         Validate.notNull(key);
-        this.key = key.trim();
+        key = key.trim();
         Validate.notEmpty(key); // trimming could potentially make empty, so validate here
+        this.key = key;
         this.val = val;
         this.parent = parent;
     }
@@ -72,11 +73,19 @@ public class Attribute implements Map.Entry<String, String>, Cloneable  {
     }
 
     /**
-     Get the attribute value.
+     Get the attribute value. Will return an empty string if the value is not set.
      @return the attribute value
      */
     public String getValue() {
-        return val;
+        return Attributes.checkNotNull(val);
+    }
+
+    /**
+     * Check if this Attribute has a value. Set boolean attributes have no value.
+     * @return if this is a boolean attribute / attribute without a value
+     */
+    public boolean hasDeclaredValue() {
+        return val != null;
     }
 
     /**
@@ -84,14 +93,15 @@ public class Attribute implements Map.Entry<String, String>, Cloneable  {
      @param val the new attribute value; must not be null
      */
     public String setValue(String val) {
-        String oldVal = parent.get(this.key);
+        String oldVal = this.val;
         if (parent != null) {
+            oldVal = parent.get(this.key); // trust the container more
             int i = parent.indexOfKey(this.key);
             if (i != Attributes.NotFound)
                 parent.vals[i] = val;
         }
         this.val = val;
-        return oldVal;
+        return Attributes.checkNotNull(oldVal);
     }
 
     /**
@@ -164,13 +174,6 @@ public class Attribute implements Map.Entry<String, String>, Cloneable  {
         return (
             out.syntax() == Document.OutputSettings.Syntax.html &&
                 (val == null || ("".equals(val) || val.equalsIgnoreCase(key)) && Attribute.isBooleanAttribute(key)));
-    }
-
-    /**
-     * @deprecated
-     */
-    protected boolean isBooleanAttribute() {
-        return Arrays.binarySearch(booleanAttributes, key) >= 0 || val == null;
     }
 
     /**

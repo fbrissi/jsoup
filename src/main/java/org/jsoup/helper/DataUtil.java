@@ -2,6 +2,7 @@ package org.jsoup.helper;
 
 import org.jsoup.UncheckedIOException;
 import org.jsoup.internal.ConstrainableInputStream;
+import org.jsoup.internal.Normalizer;
 import org.jsoup.internal.StringUtil;
 import org.jsoup.nodes.Comment;
 import org.jsoup.nodes.Document;
@@ -12,6 +13,7 @@ import org.jsoup.parser.Parser;
 import org.jsoup.select.Elements;
 
 import java.io.BufferedReader;
+import java.io.CharArrayReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -20,12 +22,14 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.IllegalCharsetNameException;
 import java.util.Locale;
 import java.util.Random;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.zip.GZIPInputStream;
 
 /**
  * Internal static utilities for handling data.
@@ -43,15 +47,26 @@ public final class DataUtil {
     private DataUtil() {}
 
     /**
-     * Loads a file to a Document.
+     * Loads and parses a file to a Document. Files that are compressed with gzip (and end in {@code .gz} or {@code .z})
+     * are supported in addition to uncompressed files.
+     *
      * @param in file to load
-     * @param charsetName character set of input
+     * @param charsetName (optional) character set of input; specify {@code null} to attempt to autodetect. A BOM in
+     *     the file will always override this setting.
      * @param baseUri base URI of document, to resolve relative links against
      * @return Document
      * @throws IOException on IO error
      */
     public static Document load(File in, String charsetName, String baseUri) throws IOException {
-        return parseInputStream(new FileInputStream(in), charsetName, baseUri, Parser.htmlParser());
+        InputStream stream = new FileInputStream(in);
+        String name = Normalizer.lowerCase(in.getName());
+        if (name.endsWith(".gz") || name.endsWith(".z")) {
+            // unfortunately file input streams don't support marks (why not?), so we will close and reopen after read
+            boolean zipped = (stream.read() == 0x1f && stream.read() == 0x8b); // gzip magic bytes
+            stream.close();
+            stream = zipped ? new GZIPInputStream(new FileInputStream(in)) : new FileInputStream(in);
+        }
+        return parseInputStream(stream, charsetName, baseUri, Parser.htmlParser());
     }
 
     /**
@@ -99,12 +114,11 @@ public final class DataUtil {
         input = ConstrainableInputStream.wrap(input, bufferSize, 0);
 
         Document doc = null;
-        boolean fullyRead = false;
 
         // read the start of the stream and look for a BOM or meta charset
         input.mark(bufferSize);
         ByteBuffer firstBytes = readToByteBuffer(input, firstReadBufferSize - 1); // -1 because we read one more to see if completed. First read is < buffer size, so can't be invalid.
-        fullyRead = input.read() == -1;
+        boolean fullyRead = (input.read() == -1);
         input.reset();
 
         // look for BOM - overrides any other header or input
@@ -113,8 +127,15 @@ public final class DataUtil {
             charsetName = bomCharset.charset;
 
         if (charsetName == null) { // determine from meta. safe first parse as UTF-8
-            String docData = Charset.forName(defaultCharset).decode(firstBytes).toString();
-            doc = parser.parseInput(docData, baseUri);
+            try {
+                CharBuffer defaultDecoded = Charset.forName(defaultCharset).decode(firstBytes);
+                if (defaultDecoded.hasArray())
+                    doc = parser.parseInput(new CharArrayReader(defaultDecoded.array()), baseUri);
+                else
+                    doc = parser.parseInput(defaultDecoded.toString(), baseUri);
+            } catch (UncheckedIOException e) {
+                throw e.ioException();
+            }
 
             // look for <meta http-equiv="Content-Type" content="text/html;charset=gb2312"> or HTML5 <meta charset="gb2312">
             Elements metaElements = doc.select("meta[http-equiv=content-type], meta[charset]");
@@ -159,8 +180,10 @@ public final class DataUtil {
             if (charsetName == null)
                 charsetName = defaultCharset;
             BufferedReader reader = new BufferedReader(new InputStreamReader(input, charsetName), bufferSize);
-            if (bomCharset != null && bomCharset.offset) // creating the buffered reader ignores the input pos, so must skip here
-                reader.skip(1);
+            if (bomCharset != null && bomCharset.offset) { // creating the buffered reader ignores the input pos, so must skip here
+                long skipped = reader.skip(1);
+                Validate.isTrue(skipped == 1); // WTF if this fails.
+            }
             try {
                 doc = parser.parseInput(reader, baseUri);
             } catch (UncheckedIOException e) {

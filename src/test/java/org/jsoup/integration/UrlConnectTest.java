@@ -1,18 +1,17 @@
 package org.jsoup.integration;
 
 import org.jsoup.Connection;
-import org.jsoup.HttpStatusException;
 import org.jsoup.Jsoup;
 import org.jsoup.UnsupportedMimeTypeException;
-import org.jsoup.internal.StringUtil;
 import org.jsoup.helper.W3CDom;
+import org.jsoup.internal.StringUtil;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.FormElement;
 import org.jsoup.parser.HtmlTreeBuilder;
 import org.jsoup.parser.Parser;
 import org.jsoup.parser.XmlTreeBuilder;
-import org.junit.Ignore;
-import org.junit.Test;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -23,14 +22,13 @@ import java.net.Proxy;
 import java.net.URL;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  Tests the URL connection. Not enabled by default, so tests don't require network connection.
 
  @author Jonathan Hedley, jonathan@hedley.net */
-@Ignore // ignored by default so tests don't require network access. comment out to enable.
+@Disabled // ignored by default so tests don't require network access. comment out to enable.
 // todo: rebuild these into a local Jetty test server, so not reliant on the vagaries of the internet.
 public class UrlConnectTest {
     private static final String WEBSITE_WITH_INVALID_CERTIFICATE = "https://certs.cac.washington.edu/CAtest/";
@@ -47,7 +45,7 @@ public class UrlConnectTest {
         assert(res.hasCookie("BAIDUID"));
         assertEquals("text/html;charset=gbk", res.contentType());
     }
-    
+
     @Test
     public void exceptOnUnknownContentType() {
         String url = "http://direct.jsoup.org/rez/osi_logo.png"; // not text/* but image/png, should throw
@@ -147,32 +145,6 @@ public class UrlConnectTest {
     }
 
     @Test
-    public void throwsExceptionOnError() {
-        String url = "http://direct.infohound.net/tools/404";
-        Connection con = Jsoup.connect(url);
-        boolean threw = false;
-        try {
-            Document doc = con.get();
-        } catch (HttpStatusException e) {
-            threw = true;
-            assertEquals("org.jsoup.HttpStatusException: HTTP error fetching URL. Status=404, URL=http://direct.infohound.net/tools/404", e.toString());
-            assertEquals(url, e.getUrl());
-            assertEquals(404, e.getStatusCode());
-        } catch (IOException e) {
-        }
-        assertTrue(threw);
-    }
-
-    @Test
-    public void ignoresExceptionIfSoConfigured() throws IOException {
-        Connection con = Jsoup.connect("http://direct.infohound.net/tools/404").ignoreHttpErrors(true);
-        Connection.Response res = con.execute();
-        Document doc = res.parse();
-        assertEquals(404, res.statusCode());
-        assertEquals("404 Not Found", doc.select("h1").first().text());
-    }
-
-    @Test
     public void ignores500tExceptionIfSoConfigured() throws IOException {
         Connection con = Jsoup.connect("http://direct.infohound.net/tools/500.pl").ignoreHttpErrors(true);
         Connection.Response res = con.execute();
@@ -253,7 +225,7 @@ public class UrlConnectTest {
         String url = "http://direct.infohound.net/tools/bad-charset.pl";
         Connection.Response res = Jsoup.connect(url).execute();
         assertEquals("text/html; charset=UFT8", res.header("Content-Type")); // from the header
-        assertEquals(null, res.charset()); // tried to get from header, not supported, so returns null
+        assertNull(res.charset()); // tried to get from header, not supported, so returns null
         Document doc = res.parse(); // would throw an error if charset unsupported
         assertTrue(doc.text().contains("Hello!"));
         assertEquals("UTF-8", res.charset()); // set from default on parse
@@ -284,10 +256,10 @@ public class UrlConnectTest {
      *
      * @throws Exception
      */
-    @Test(expected = IOException.class)
+    @Test
     public void testUnsafeFail() throws Exception {
         String url = WEBSITE_WITH_INVALID_CERTIFICATE;
-        Jsoup.connect(url).execute();
+        assertThrows(IOException.class, () -> Jsoup.connect(url).execute());
     }
 
 
@@ -300,10 +272,9 @@ public class UrlConnectTest {
      * Test is ignored independent from others as it requires JDK 1.6
      * @throws Exception
      */
-    @Test(expected = IOException.class)
+    @Test
     public void testSNIFail() throws Exception {
-        String url = WEBSITE_WITH_SNI;
-        Jsoup.connect(url).execute();
+        assertThrows(IOException.class, () -> Jsoup.connect(WEBSITE_WITH_SNI).execute());
     }
 
     @Test
@@ -469,7 +440,7 @@ public class UrlConnectTest {
     }
 
     @Test
-    public void invalidProxyFails() throws IOException {
+    public void invalidProxyFails() {
         boolean caught = false;
         String url = "https://jsoup.org";
         try {
@@ -512,7 +483,7 @@ public class UrlConnectTest {
 
         // included in meta
         Connection.Response res1 = Jsoup.connect(charsetUrl).execute();
-        assertEquals(null, res1.charset()); // not set in headers
+        assertNull(res1.charset()); // not set in headers
         final Document doc1 = res1.parse();
         assertEquals("windows-1252", doc1.charset().displayName()); // but determined at parse time
         assertEquals("Cost is €100", doc1.select("p").text());
@@ -520,7 +491,7 @@ public class UrlConnectTest {
 
         // no meta, no override
         Connection.Response res2 = Jsoup.connect(noCharsetUrl).execute();
-        assertEquals(null, res2.charset()); // not set in headers
+        assertNull(res2.charset()); // not set in headers
         final Document doc2 = res2.parse();
         assertEquals("UTF-8", doc2.charset().displayName()); // so defaults to utf-8
         assertEquals("Cost is �100", doc2.select("p").text());
@@ -528,7 +499,7 @@ public class UrlConnectTest {
 
         // no meta, let's override
         Connection.Response res3 = Jsoup.connect(noCharsetUrl).execute();
-        assertEquals(null, res3.charset()); // not set in headers
+        assertNull(res3.charset()); // not set in headers
         res3.charset("windows-1252");
         assertEquals("windows-1252", res3.charset()); // read back
         final Document doc3 = res3.parse();
