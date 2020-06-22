@@ -786,9 +786,6 @@ public abstract class Evaluator {
 
         @Override
         public boolean matches(Element root, Element element) {
-            if (element instanceof PseudoTextElement)
-                return true;
-
             return !element.hasAttr("disabled");
         }
 
@@ -802,9 +799,6 @@ public abstract class Evaluator {
 
         @Override
         public boolean matches(Element root, Element element) {
-            if (element instanceof PseudoTextElement)
-                return true;
-
             return element.hasAttr("disabled");
         }
 
